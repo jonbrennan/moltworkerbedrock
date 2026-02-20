@@ -7,6 +7,34 @@
 # 4. Starts a background sync loop (rclone, watches for file changes)
 # 5. Starts the gateway
 
+# START Customized Coding Additions
+# Custom: Start LiteLLM in the background before running OpenClaw
+litellm --port 4000 --drop_params &
+sleep 5  # Give LiteLLM time to start
+
+# Custom: Start LiteLLM proxy for Bedrock and inject config
+mkdir -p ~/.openclaw
+cat <<EOF > ~/.openclaw/openclaw.json
+{
+  "models": {
+    "providers": {
+      "bedrock": {
+        "baseUrl": "http://127.0.0.1:4000",
+        "api": "openai-completions"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0"
+      }
+    }
+  }
+}
+EOF
+# END Customized Coding Additions
+
 set -e
 
 if pgrep -f "openclaw gateway" > /dev/null 2>&1; then

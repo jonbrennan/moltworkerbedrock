@@ -45,14 +45,19 @@ fi
 # Your pgrep check...
 
 # Custom: Start LiteLLM proxy for Bedrock and inject config
+echo "Writing OpenClaw config for Bedrock..." >&2
 mkdir -p ~/.openclaw
-cat <<EOF > ~/.openclaw/openclaw.json
+cat > ~/.openclaw/openclaw.json << 'EOF'
 {
   "models": {
     "providers": {
       "bedrock": {
         "baseUrl": "http://127.0.0.1:4000",
-        "api": "openai-completions"
+        "api": "openai-completions",
+        "models": [
+          "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "anthropic.claude-3-haiku-20240307-v1:0"
+        ]
       }
     }
   },
@@ -65,6 +70,15 @@ cat <<EOF > ~/.openclaw/openclaw.json
   }
 }
 EOF
+
+# Debug check
+if [ -f ~/.openclaw/openclaw.json ]; then
+  echo "Config written OK:" >&2
+  cat ~/.openclaw/openclaw.json >&2
+else
+  echo "Config write FAILED!" >&2
+  exit 1
+fi
 # END Customized Coding Additions
 
 set -e

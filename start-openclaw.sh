@@ -8,9 +8,41 @@
 # 5. Starts the gateway
 
 # START Customized Coding Additions
-# Custom: Start LiteLLM in the background before running OpenClaw
-litellm --port 4000 --drop_params &
-sleep 5  # Give LiteLLM time to start
+set -euo pipefail  # Exit on errors, unset vars, pipe fails
+echo "=== start-openclaw.sh STARTED ===" >&2
+echo "Current directory: $(pwd)" >&2
+echo "Env vars (filtered):" >&2
+env | grep -E 'AWS_|ANTHROPIC|MOLT|OPENCLAW|PATH' >&2 || echo "No matching env vars" >&2
+
+# Your LiteLLM block here, but with more output
+echo "Attempting to start LiteLLM..." >&2
+litellm --port 4000 --drop_params > /tmp/litellm.log 2>&1 &
+LITELLM_PID=$!
+sleep 15  # Give more time
+if ps -p $LITELLM_PID > /dev/null; then
+  echo "LiteLLM running (PID $LITELLM_PID)" >&2
+  cat /tmp/litellm.log >&2 || echo "No LiteLLM log" >&2
+else
+  echo "LiteLLM FAILED to start!" >&2
+  cat /tmp/litellm.log >&2
+  exit 1
+fi
+
+# Config injection with check
+echo "Writing config..." >&2
+mkdir -p ~/.openclaw
+cat > ~/.openclaw/openclaw.json << 'EOF'
+{ ... your JSON here ... }
+EOF
+if [ -f ~/.openclaw/openclaw.json ]; then
+  echo "Config written successfully:" >&2
+  cat ~/.openclaw/openclaw.json >&2
+else
+  echo "Config write FAILED!" >&2
+  exit 1
+fi
+
+# Your pgrep check...
 
 # Custom: Start LiteLLM proxy for Bedrock and inject config
 mkdir -p ~/.openclaw

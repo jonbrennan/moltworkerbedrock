@@ -71,9 +71,9 @@ cat > ~/.openclaw/openclaw.json << 'EOF'
 }
 EOF
 
-# Debug check
+# Enhanced debug
 if [ -f ~/.openclaw/openclaw.json ]; then
-  echo "Config written OK:" >&2
+  echo "Config written successfully:" >&2
   cat ~/.openclaw/openclaw.json >&2
 else
   echo "Config write FAILED!" >&2

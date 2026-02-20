@@ -25,6 +25,10 @@ RUN npm install -g pnpm
 RUN npm install -g openclaw@2026.2.3 \
     && openclaw --version
 
+# Install Python 3 + pip + LiteLLM proxy for Bedrock support
+RUN apt-get update && apt-get install -y python3 python3-pip \
+    && python3 -m pip install --no-cache-dir litellm[proxy]
+
 # Create OpenClaw directories
 # Legacy .clawdbot paths are kept for R2 backup migration
 RUN mkdir -p /root/.openclaw \

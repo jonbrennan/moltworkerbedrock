@@ -7,44 +7,44 @@
 # 4. Starts a background sync loop (rclone, watches for file changes)
 # 5. Starts the gateway
 
-# START Customized Coding Additions
+# START Customized Coding Additions for Bedrock via LiteLLM
+
 set -euo pipefail  # Exit on errors, unset vars, pipe fails
-echo "=== start-openclaw.sh STARTED ===" >&2
+
+echo "=== start-openclaw.sh STARTED at $(date) ===" >&2
 echo "Current directory: $(pwd)" >&2
 echo "Env vars (filtered):" >&2
 env | grep -E 'AWS_|ANTHROPIC|MOLT|OPENCLAW|PATH' >&2 || echo "No matching env vars" >&2
 
-# Your LiteLLM block here, but with more output
-echo "Attempting to start LiteLLM..." >&2
-litellm --port 4000 --drop_params > /tmp/litellm.log 2>&1 &
+echo "Attempting to start LiteLLM proxy..." >&2
+
+# Launch LiteLLM in background with explicit nohup/disown to force detach
+nohup litellm --port 4000 --drop_params > /tmp/litellm.log 2>&1 &
 LITELLM_PID=$!
-sleep 15  # Give more time
+disown $LITELLM_PID  # Prevent bash from waiting on it
+
+echo "LiteLLM launched with PID $LITELLM_PID" >&2
+
+sleep 20  # Extended time for Uvicorn/FastAPI init in container
+
+# Check status
 if ps -p $LITELLM_PID > /dev/null; then
-  echo "LiteLLM running (PID $LITELLM_PID)" >&2
-  cat /tmp/litellm.log >&2 || echo "No LiteLLM log" >&2
+  echo "LiteLLM appears alive (PID $LITELLM_PID)" >&2
+  head -n 30 /tmp/litellm.log >&2 || echo "LiteLLM log empty or not written yet" >&2
+  # Optional: Check port (install net-tools if needed, but skip if not present)
+  if command -v netstat >/dev/null; then
+    netstat -tuln | grep 4000 >&2 || echo "Warning: Port 4000 not listening yet" >&2
+  else
+    echo "netstat not available; skipping port check" >&2
+  fi
 else
-  echo "LiteLLM FAILED to start!" >&2
+  echo "LiteLLM FAILED or exited immediately!" >&2
   cat /tmp/litellm.log >&2
+  echo "LiteLLM startup failed - exiting script" >&2
   exit 1
 fi
 
-# Config injection with check
-echo "Writing config..." >&2
-mkdir -p ~/.openclaw
-cat > ~/.openclaw/openclaw.json << 'EOF'
-{ ... your JSON here ... }
-EOF
-if [ -f ~/.openclaw/openclaw.json ]; then
-  echo "Config written successfully:" >&2
-  cat ~/.openclaw/openclaw.json >&2
-else
-  echo "Config write FAILED!" >&2
-  exit 1
-fi
-
-# Your pgrep check...
-
-# Custom: Start LiteLLM proxy for Bedrock and inject config
+# Config injection (only once)
 echo "Writing OpenClaw config for Bedrock..." >&2
 mkdir -p ~/.openclaw
 cat > ~/.openclaw/openclaw.json << 'EOF'
@@ -71,7 +71,6 @@ cat > ~/.openclaw/openclaw.json << 'EOF'
 }
 EOF
 
-# Enhanced debug
 if [ -f ~/.openclaw/openclaw.json ]; then
   echo "Config written successfully:" >&2
   cat ~/.openclaw/openclaw.json >&2
@@ -79,6 +78,7 @@ else
   echo "Config write FAILED!" >&2
   exit 1
 fi
+
 # END Customized Coding Additions
 
 set -e

@@ -74,7 +74,7 @@ fi
 
 echo "LiteLLM appears ready - proceeding to config injection" >&2
 
-# Config injection - use printf for exact control (avoids heredoc indentation bugs)
+# Config injection - use printf for precise, clean JSON
 echo "Writing OpenClaw config for Bedrock..." >&2
 mkdir -p ~/.openclaw
 
@@ -100,12 +100,16 @@ printf '{
   }
 }\n' > ~/.openclaw/openclaw.json
 
+# Verify write and content
 if [ -f ~/.openclaw/openclaw.json ]; then
-  echo "Config written successfully (size: $(stat -c %s ~/.openclaw/openclaw.json) bytes):" >&2
+  SIZE=$(stat -c %s ~/.openclaw/openclaw.json 2>/dev/null || echo "unknown")
+  echo "Config written successfully (size: $SIZE bytes):" >&2
   cat ~/.openclaw/openclaw.json >&2
-  # Quick JSON validation (if jq installed; optional)
+  # Optional jq validation (if jq in Sandbox)
   if command -v jq >/dev/null; then
-    jq . ~/.openclaw/openclaw.json >/dev/null 2>&1 && echo "JSON parses OK" >&2 || echo "JSON parse error!" >&2
+    jq . ~/.openclaw/openclaw.json >/dev/null 2>&1 && echo "JSON parses OK with jq" >&2 || echo "jq parse error!" >&2
+  else
+    echo "jq not available; skipping parse check" >&2
   fi
 else
   echo "Config write FAILED!" >&2

@@ -7,107 +7,6 @@
 # 4. Starts a background sync loop (rclone, watches for file changes)
 # 5. Starts the gateway
 
-# START Customized Coding Additions for Bedrock via LiteLLM
-
-set -euo pipefail  # Exit on errors, unset vars, pipe fails
-
-echo "=== start-openclaw.sh STARTED at $(date) ===" >&2
-echo "Current directory: $(pwd)" >&2
-echo "Env vars (filtered):" >&2
-env | grep -E 'AWS_|ANTHROPIC|MOLT|OPENCLAW|PATH' >&2 || echo "No matching env vars" >&2
-
-echo "Attempting to start LiteLLM proxy..." >&2
-
-# Launch with stronger detachment
-nohup litellm --port 4000 --drop_params > /tmp/litellm.log 2>&1 &
-LITELLM_PID=$!
-disown $LITELLM_PID || echo "Disown failed, continuing anyway" >&2
-
-echo "LiteLLM launched with PID $LITELLM_PID at $(date)" >&2
-sync  # Flush buffers
-
-# Poll for readiness (no long sleep; checks every 2s, max 60s)
-echo "Waiting for LiteLLM to become ready (up to 60s)..." >&2
-TIMEOUT=60
-START_TIME=$(date +%s)
-
-while [ $(( $(date +%s) - START_TIME )) -lt $TIMEOUT ]; do
-  if ps -p $LITELLM_PID > /dev/null 2>&1; then
-    echo "LiteLLM process still alive (PID $LITELLM_PID) at $(date)" >&2
-    
-    # Check log for key phrases
-    if grep -qi "Uvicorn running on" /tmp/litellm.log 2>/dev/null; then
-      echo "SUCCESS: LiteLLM ready (Uvicorn startup detected in log)" >&2
-      break
-    elif grep -qi "error" /tmp/litellm.log 2>/dev/null; then
-      echo "LiteLLM log shows error - dumping full log:" >&2
-      cat /tmp/litellm.log >&2
-      exit 1
-    fi
-    
-    # Health check
-    if command -v curl >/dev/null; then
-      HEALTH=$(curl -s -m 3 http://127.0.0.1:4000/health 2>/dev/null || echo "failed")
-      echo "Health check result: $HEALTH" >&2
-      if [[ "$HEALTH" == *"healthy"* || "$HEALTH" == "OK" || "$HEALTH" == "" ]]; then  # empty sometimes OK if no response body
-        echo "LiteLLM health check passed" >&2
-        break
-      fi
-    else
-      echo "curl not available; skipping health check" >&2
-    fi
-  else
-    echo "LiteLLM process died! Dumping log:" >&2
-    cat /tmp/litellm.log >&2
-    exit 1
-  fi
-  
-  sleep 2
-  echo "Still waiting... ($(date +%s - $START_TIME) seconds elapsed)" >&2
-done
-
-if [ $(( $(date +%s) - START_TIME )) -ge $TIMEOUT ]; then
-  echo "TIMEOUT (60s): LiteLLM not ready - dumping current log:" >&2
-  cat /tmp/litellm.log >&2
-  exit 1
-fi
-
-echo "LiteLLM appears ready - proceeding to config injection" >&2
-
-# Config injection - minimal structure for custom provider
-echo "Writing OpenClaw config for Bedrock..." >&2
-mkdir -p ~/.openclaw
-
-printf '{
-  "models": {
-    "providers": {
-      "bedrock": {
-        "baseUrl": "http://127.0.0.1:4000",
-        "api": "openai-completions",
-        "models": [
-          "anthropic.claude-3-5-sonnet-20240620-v1:0",
-          "anthropic.claude-3-haiku-20240307-v1:0"
-        ]
-      }
-    }
-  }
-}\n' > ~/.openclaw/openclaw.json
-
-# Verify
-if [ -f ~/.openclaw/openclaw.json ]; then
-  SIZE=$(stat -c %s ~/.openclaw/openclaw.json 2>/dev/null || echo "unknown")
-  echo "Config written successfully (size: $SIZE bytes):" >&2
-  cat ~/.openclaw/openclaw.json >&2
-  if command -v jq >/dev/null; then
-    jq . ~/.openclaw/openclaw.json >/dev/null 2>&1 && echo "JSON parses OK with jq" >&2 || echo "jq parse error!" >&2
-  fi
-else
-  echo "Config write FAILED!" >&2
-  exit 1
-fi
-
-# END Customized Coding Additions
-
 set -e
 
 if pgrep -f "openclaw gateway" > /dev/null 2>&1; then
@@ -364,6 +263,107 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 console.log('Configuration patched successfully');
 EOFPATCH
+
+# START Customized Coding Additions for Bedrock via LiteLLM
+
+set -euo pipefail  # Exit on errors, unset vars, pipe fails
+
+echo "=== start-openclaw.sh STARTED at $(date) ===" >&2
+echo "Current directory: $(pwd)" >&2
+echo "Env vars (filtered):" >&2
+env | grep -E 'AWS_|ANTHROPIC|MOLT|OPENCLAW|PATH' >&2 || echo "No matching env vars" >&2
+
+echo "Attempting to start LiteLLM proxy..." >&2
+
+# Launch with stronger detachment
+nohup litellm --port 4000 --drop_params > /tmp/litellm.log 2>&1 &
+LITELLM_PID=$!
+disown $LITELLM_PID || echo "Disown failed, continuing anyway" >&2
+
+echo "LiteLLM launched with PID $LITELLM_PID at $(date)" >&2
+sync  # Flush buffers
+
+# Poll for readiness (no long sleep; checks every 2s, max 60s)
+echo "Waiting for LiteLLM to become ready (up to 60s)..." >&2
+TIMEOUT=60
+START_TIME=$(date +%s)
+
+while [ $(( $(date +%s) - START_TIME )) -lt $TIMEOUT ]; do
+  if ps -p $LITELLM_PID > /dev/null 2>&1; then
+    echo "LiteLLM process still alive (PID $LITELLM_PID) at $(date)" >&2
+    
+    # Check log for key phrases
+    if grep -qi "Uvicorn running on" /tmp/litellm.log 2>/dev/null; then
+      echo "SUCCESS: LiteLLM ready (Uvicorn startup detected in log)" >&2
+      break
+    elif grep -qi "error" /tmp/litellm.log 2>/dev/null; then
+      echo "LiteLLM log shows error - dumping full log:" >&2
+      cat /tmp/litellm.log >&2
+      exit 1
+    fi
+    
+    # Health check
+    if command -v curl >/dev/null; then
+      HEALTH=$(curl -s -m 3 http://127.0.0.1:4000/health 2>/dev/null || echo "failed")
+      echo "Health check result: $HEALTH" >&2
+      if [[ "$HEALTH" == *"healthy"* || "$HEALTH" == "OK" || "$HEALTH" == "" ]]; then  # empty sometimes OK if no response body
+        echo "LiteLLM health check passed" >&2
+        break
+      fi
+    else
+      echo "curl not available; skipping health check" >&2
+    fi
+  else
+    echo "LiteLLM process died! Dumping log:" >&2
+    cat /tmp/litellm.log >&2
+    exit 1
+  fi
+  
+  sleep 2
+  echo "Still waiting... ($(date +%s - $START_TIME) seconds elapsed)" >&2
+done
+
+if [ $(( $(date +%s) - START_TIME )) -ge $TIMEOUT ]; then
+  echo "TIMEOUT (60s): LiteLLM not ready - dumping current log:" >&2
+  cat /tmp/litellm.log >&2
+  exit 1
+fi
+
+echo "LiteLLM appears ready - proceeding to config injection" >&2
+
+# Config injection - minimal structure for custom provider
+echo "Writing OpenClaw config for Bedrock..." >&2
+mkdir -p ~/.openclaw
+
+printf '{
+  "models": {
+    "providers": {
+      "bedrock": {
+        "baseUrl": "http://127.0.0.1:4000",
+        "api": "openai-completions",
+        "models": [
+          "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "anthropic.claude-3-haiku-20240307-v1:0"
+        ]
+      }
+    }
+  }
+}\n' > ~/.openclaw/openclaw.json
+
+# Verify
+if [ -f ~/.openclaw/openclaw.json ]; then
+  SIZE=$(stat -c %s ~/.openclaw/openclaw.json 2>/dev/null || echo "unknown")
+  echo "Config written successfully (size: $SIZE bytes):" >&2
+  cat ~/.openclaw/openclaw.json >&2
+  if command -v jq >/dev/null; then
+    jq . ~/.openclaw/openclaw.json >/dev/null 2>&1 && echo "JSON parses OK with jq" >&2 || echo "jq parse error!" >&2
+  fi
+else
+  echo "Config write FAILED!" >&2
+  exit 1
+fi
+
+# END Customized Coding Additions
 
 # ============================================================
 # BACKGROUND SYNC LOOP

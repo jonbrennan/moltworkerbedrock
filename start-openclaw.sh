@@ -18,29 +18,30 @@ env | grep -E 'AWS_|ANTHROPIC|MOLT|OPENCLAW|PATH' >&2 || echo "No matching env v
 
 echo "Attempting to start LiteLLM proxy..." >&2
 
-# Launch LiteLLM in background with explicit nohup/disown to force detach
+# Use nohup + disown for reliable detachment in containers
 nohup litellm --port 4000 --drop_params > /tmp/litellm.log 2>&1 &
 LITELLM_PID=$!
-disown $LITELLM_PID  # Prevent bash from waiting on it
+disown $LITELLM_PID || echo "Disown failed, but continuing" >&2
 
 echo "LiteLLM launched with PID $LITELLM_PID" >&2
 
-sleep 20  # Extended time for Uvicorn/FastAPI init in container
+sleep 20  # Give ample time for Uvicorn init
 
-# Check status
-if ps -p $LITELLM_PID > /dev/null; then
+# Aggressive status check
+if ps -p $LITELLM_PID > /dev/null 2>&1; then
   echo "LiteLLM appears alive (PID $LITELLM_PID)" >&2
-  head -n 30 /tmp/litellm.log >&2 || echo "LiteLLM log empty or not written yet" >&2
-  # Optional: Check port (install net-tools if needed, but skip if not present)
-  if command -v netstat >/dev/null; then
-    netstat -tuln | grep 4000 >&2 || echo "Warning: Port 4000 not listening yet" >&2
+  echo "First 30 lines of LiteLLM log:" >&2
+  head -n 30 /tmp/litellm.log >&2 || echo "LiteLLM log empty or inaccessible" >&2
+  if command -v curl >/dev/null; then
+    echo "Testing local LiteLLM health..." >&2
+    curl -s -m 5 http://127.0.0.1:4000/health || echo "Health check failed or timed out" >&2
   else
-    echo "netstat not available; skipping port check" >&2
+    echo "curl not available; skipping health check" >&2
   fi
 else
-  echo "LiteLLM FAILED or exited immediately!" >&2
-  cat /tmp/litellm.log >&2
-  echo "LiteLLM startup failed - exiting script" >&2
+  echo "LiteLLM NOT running after sleep!" >&2
+  cat /tmp/litellm.log >&2 || echo "No log file created" >&2
+  echo "LiteLLM startup failed - exiting script early" >&2
   exit 1
 fi
 

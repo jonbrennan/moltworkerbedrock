@@ -342,8 +342,7 @@ printf '{
         "baseUrl": "http://127.0.0.1:4000",
         "api": "openai-completions",
         "models": [
-          "anthropic.claude-3-5-sonnet-20240620-v1:0",
-          "anthropic.claude-3-haiku-20240307-v1:0"
+          { "id": "anthropic.claude-sonnet-4-6" }
         ]
       }
     }
